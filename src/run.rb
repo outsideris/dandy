@@ -1,5 +1,6 @@
 require 'net/http'
 require 'uri'
+require 'json'
 
 # 기본 경로 설정
 home_dir = File.expand_path '~/.dandy'
@@ -9,7 +10,7 @@ query_file = File.join home_dir, 'query'
 query = File.read query_file
 
 # 부산대 맞춤법/문법 검사기 접속
-uri = URI.parse 'http://speller.cs.pusan.ac.kr/PnuWebSpeller/lib/check.asp'
+uri = URI.parse 'http://speller.cs.pusan.ac.kr/results'
 
 http = Net::HTTP.new uri.host, uri.port
 
@@ -20,20 +21,17 @@ begin
     response = http.request request
 
     # 필요한 데이터만 뽑아 내기
-    if response.body =~ /\s*<form id='formBugReport1'[^>]+>(.*)<\/form>/im
+    if response.body =~ /\s*data = \[(.*)\];/im
         source = $1
+        data = JSON.parse(source)
+        count = data['errInfo'].length
     else
         source = "HTML 분석에 실패했습니다."
-    end
-
-    # 오류갯수 가져오기
-    if response.body =~ /\s*<input type='hidden' id='correctionTableSize' value='([0-9]+)'\/>/im
-        count = $1
-    else
-        source = "HTML 분석에 실패했습니다."
+        count = 0
     end
 rescue => e
     source = e
+    count = 0
 end
 
 # 설정 파일 읽기
@@ -44,9 +42,32 @@ config = File.read config_file
 template_file = File.join home_dir, 'template'
 template = File.read template_file
 
+result = ''
+data['errInfo'].each do |item|
+  result += "<table id='tableErr_#{item['errorIdx']}' class='tableErrCorrect' border='1' cellpadding='3' cellspacing='0'>\n"
+  result += "  <!--틀린어절 -->\n"
+  result += "  <TR>\n"
+  result += "    <TD class='tdLT' title=0>입력 내용</TD>\n"
+  result += "    <TD id='tdErrorWord_0' class='tdErrWord' style='color:#FF0000;' >#{item['orgStr']}</TD>\n"
+  result += "  </TR>\n"
+  result += "  <!--대치어 -->\n"
+  result += "  <TR>\n"
+  result += "    <TD class='tdLT'>대치어</TD>\n"
+  result += "    <TD id='tdReplaceWord_0' class='tdReplace' >#{item['candWord'].split('|').join('<br/>')}</TD>\n"
+  result += "  </TR>\n"
+  result += "  <!--도움말 -->\n"
+  result += "  <TR>\n"
+  result += "    <TD class='tdLT'>도움말</TD>\n"
+  result += "    <TD id='tdHelp_0' class='tdETNor'><br/>#{item['help']}</TD>\n"
+  result += "  </TR>\n"
+  result += "</TABLE><br/>\n"
+end
+
+# puts result
+
 # 템플릿 채우기
-template.gsub!('{{count}}') {count.force_encoding('utf-8')}
-template.gsub!('{{source}}') {source.force_encoding('utf-8')}
+template.gsub!('{{count}}') {count.to_s.force_encoding('utf-8')}
+template.gsub!('{{result}}') {result.force_encoding('utf-8')}
 template.gsub!('{{config}}') {config.force_encoding('utf-8')}
 
 # 최종 결과 파일에 쓰기

@@ -49,7 +49,7 @@
         <!-- 오류 수  -->
         <input type='hidden' id='correctionTableSize' value='{{count}}'/>
 
-        <div id="source">{{source}}</div>
+        <div id="source">{{result}}</div>
 
         <textarea id="result"></textarea>
 
